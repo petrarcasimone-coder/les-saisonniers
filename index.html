@@ -14,7 +14,7 @@ case "choose":return '<main><h1>Choisissez votre parcours</h1><p class="lead">D�
 case "intro":return '<main><h1>Qui étaient les saisonniers ?</h1><p class="lead">Pendant des décennies, des milliers de personnes sont venues travailler en Suisse avec un permis de séjour particulier : le permis A.</p><div class="fact-grid"><div class="fact">01<span>Un séjour lié au travail saisonnier</span></div><div class="fact">02<span>Des droits et des possibilités de séjour limités</span></div><div class="fact">03<span>Des familles souvent séparées</span></div></div><section class="question-banner"><small>Une question pour commencer</small><div class="banner-row"><div><p><strong>Pourquoi certains enfants de saisonniers devaient-ils vivre cachés ?</strong></p><p>Formulez une première hypothèse. Vous découvrirez des histoires personnelles au fil du parcours.</p></div><button class="btn" onclick="go(\'chapters\')">Découvrir les histoires</button></div></section></main>';
 case "chapters":return '<main><h1>Explorer les histoires</h1><p class="lead">Quatre chapitres pour découvrir la vie des saisonniers et des saisonnières italien·ne·s à Zurich à travers des lieux, des archives et des témoignages.</p><div class="chapter-grid">'+chapters.map((c,i)=>'<article class="chapter-card"><span class="eyebrow">Chapitre 0'+(i+1)+'</span><h3>'+c[2]+' '+c[0]+'</h3><p>'+c[1]+'</p><button class="text-link" onclick="'+(i===2?"startStation()":"go('pending')")+'">Découvrir →</button></article>').join("")+'</div><p style="margin-top:35px">Des histoires liées à des lieux de Zurich <button class="text-link" onclick="go(\'map\')">voir la carte →</button></p></main>';
 case "pending":return '<main><h1>Chapitre en préparation</h1><p class="lead">Les sources et activités de ce chapitre seront ajoutées prochainement.</p><button class="btn" onclick="go(\'chapters\')">Retour aux chapitres</button></main>';
-case "map":return '<main><h1>Sur les traces des saisonnier·ière·s</h1><p class="lead">Parcourez les rues de Zurich et découvrez les histoires de celles et ceux qui ont vécu et travaillé.</p><div id="zurich-map" role="region" aria-label="Carte interactive de Zurich avec trois stations"></div><p class="map-note">Fond de carte : © swisstopo. Les positions des stations sont provisoires et seront vérifiées.</p><div class="station-links"><button onclick="startStation()">Römerhof · Les enfants cachés</button><button onclick="go(\'chapters\')">Explorer les chapitres</button></div></main>';
+case "map":return '<main><h1>Sur les traces des saisonnier·ière·s</h1><p class="lead">Parcourez les rues de Zurich et découvrez les histoires de celles et ceux qui ont vécu et travaillé.</p><div id="zurich-map" role="region" aria-label="Carte interactive de Zurich avec trois stations"></div><p class="map-note">Fond de carte : © swisstopo. Positions recherchées dans les données géographiques suisses ; vérifiez les croisements et les bâtiments avant le parcours.</p><p class="map-note" id="map-status" aria-live="polite"></p><div class="station-links"><span style="color:#ad4c3c;font-weight:700">● Parcours 1 · 5 stations</span><span style="color:#386c96;font-weight:700">● Parcours 2 · 3 stations</span></div><div class="station-links"><button onclick="startStation()">Römerhof · Les enfants cachés</button><button onclick="go(\'chapters\')">Explorer les chapitres</button></div></main>';
 case "station":return station();
 case "carnet":return '<main><h1>Mon carnet de bord</h1><p class="lead">Vos réponses sont enregistrées sur cet appareil. Vous pouvez les copier ou télécharger.</p><section class="question-card"><pre id="carnetText" style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit">'+esc(carnetText())+'</pre></section><div class="carnet-actions"><button onclick="navigator.clipboard.writeText(carnetText()).then(()=>alert(\'Carnet copié\'))">Copier le carnet</button><button onclick="downloadCarnet()">Télécharger (.txt)</button></div><p>L’envoi automatique par e-mail n’est pas encore disponible. Aucune réponse n’est transmise à un serveur.</p></main>';
 }}
@@ -28,23 +28,46 @@ function check1(){document.getElementById("feedback").textContent=saved.q1===und
 function carnetText(){return "LES SAISONNIERS – MON CARNET DE BORD\n\nObservations :\n"+(saved.observations||"—")+"\n\nNotes d’écoute :\n"+(saved.ecoute||"—")+"\n\nQuestion 1 : "+(saved.q1===undefined?"—":["Restrictions au regroupement familial","Écoles fermées","Interdiction de parler italien"][Number(saved.q1)])+"\nQuestion 2 : "+(saved.q2a||"—")+" / "+(saved.q2b||"—")+"\n\nRéflexion :\n"+(saved.reflexion||"—")}
 function downloadCarnet(){const b=new Blob([carnetText()],{type:"text/plain;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="mon-carnet-saisonniers.txt";a.click();URL.revokeObjectURL(a.href)}
 let mapInstance=null;
-function initZurichMap(){
+async function initZurichMap(){
  const el=document.getElementById("zurich-map");
  if(typeof maplibregl==="undefined"){el.textContent="Carte indisponible pour le moment.";return}
- mapInstance=new maplibregl.Map({container:"zurich-map",style:"https://vectortiles.geo.admin.ch/styles/ch.swisstopo.lightbasemap.vt/style.json",center:[8.545,47.375],zoom:12.8,attributionControl:false});
- mapInstance.addControl(new maplibregl.NavigationControl(),"top-right");
- mapInstance.addControl(new maplibregl.AttributionControl({compact:false}),"bottom-right");
- const stations=[
- {n:"1",title:"Kaserneareal",description:"Première station du parcours (contenu à venir).",lng:8.531,lat:47.379,active:false},
- {n:"2",title:"Langstrasse",description:"Deuxième station du parcours (contenu à venir).",lng:8.527,lat:47.380,active:false},
- {n:"3",title:"Römerhof",description:"Les enfants cachés : découvrir la station.",lng:8.566,lat:47.367,active:true}
+ mapInstance=new maplibregl.Map({container:"zurich-map",style:"https://vectortiles.geo.admin.ch/styles/ch.swisstopo.lightbasemap.vt/style.json",center:[8.537,47.375],zoom:12.1,attributionControl:false});
+ const currentMap=mapInstance;
+ currentMap.addControl(new maplibregl.NavigationControl(),"top-right");
+ currentMap.addControl(new maplibregl.AttributionControl({compact:false}),"bottom-right");
+ const stops=[
+ {route:1,n:1,title:"Kaserneareal",query:"Kasernenareal Zürich",description:"Parcours 1 · Kaserneareal"},
+ {route:1,n:2,title:"Militärstrasse / Kanonengasse",query:"Kanonengasse 1 Zürich",description:"Parcours 1 · Croisement Militärstrasse / Kanonengasse"},
+ {route:1,n:3,title:"Brauerstrasse / Kurzgasse",query:"Kurzgasse 1 Zürich",description:"Parcours 1 · Croisement Brauerstrasse / Kurzgasse"},
+ {route:1,n:4,title:"Feldstrasse / Missione Cattolica",query:"Feldstrasse 109 Zürich",description:"Parcours 1 · En face de la Missione Cattolica"},
+ {route:1,n:5,title:"CATIA / Radio LoRa",query:"Militärstrasse 85a Zürich",description:"Parcours 1 · CATIA / Radio LoRa"},
+ {route:2,n:1,title:"Schulhaus Ämtler",query:"Bertastrasse 50 Zürich",description:"Parcours 2 · École Ämtler près du Goldbrunnenplatz"},
+ {route:2,n:2,title:"Klosbachstrasse 117",query:"Klosbachstrasse 117 Zürich",description:"Parcours 2 · Klosbachstrasse 117"},
+ {route:2,n:3,title:"Gewerbeschule",query:"Ausstellungsstrasse 60 Zürich",description:"Parcours 2 · Gewerbeschule (emplacement à confirmer)"}
  ];
- stations.forEach(st=>{
-  const marker=document.createElement("button");marker.className="station-marker";marker.textContent=st.n;marker.setAttribute("aria-label","Station "+st.n+": "+st.title);
-  const popup=document.createElement("div");const h=document.createElement("h3");h.textContent=st.title;const p=document.createElement("p");p.textContent=st.description;popup.append(h,p);
-  if(st.active){const b=document.createElement("button");b.className="map-popup-btn";b.textContent="Découvrir →";b.addEventListener("click",()=>startStation());popup.append(b)}
-  new maplibregl.Marker({element:marker}).setLngLat([st.lng,st.lat]).setPopup(new maplibregl.Popup({offset:24}).setDOMContent(popup)).addTo(mapInstance)
- });
+ const lookup=async query=>{
+  const u="https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&limit=1&searchText="+encodeURIComponent(query);
+  const res=await fetch(u);if(!res.ok)throw Error("Recherche indisponible");
+  const json=await res.json();const a=json.results?.[0]?.attrs;
+  if(!a||!Number.isFinite(Number(a.lon))||!Number.isFinite(Number(a.lat)))throw Error("Adresse introuvable");
+  return [Number(a.lon),Number(a.lat)];
+ };
+ const bounds=new maplibregl.LngLatBounds();let count=0;const failed=[];
+ await Promise.all(stops.map(async st=>{
+  try{
+   const pos=await lookup(st.query);
+   if(mapInstance!==currentMap)return;
+   const marker=document.createElement("button");marker.className="station-marker";marker.style.background=st.route===1?"#ad4c3c":"#386c96";marker.textContent=st.n;
+   marker.setAttribute("aria-label","Parcours "+st.route+", station "+st.n+" : "+st.title);
+   const popup=document.createElement("div");const h=document.createElement("h3");h.textContent=st.title;const p=document.createElement("p");p.textContent=st.description;popup.append(h,p);
+   if(st.route===2&&st.n===2){const b=document.createElement("button");b.className="map-popup-btn";b.textContent="Les enfants cachés →";b.addEventListener("click",()=>startStation());popup.append(b)}
+   new maplibregl.Marker({element:marker}).setLngLat(pos).setPopup(new maplibregl.Popup({offset:24}).setDOMContent(popup)).addTo(currentMap);
+   bounds.extend(pos);count++;
+  }catch(e){failed.push(st.title);console.warn("Station non localisée",st.title,e)}
+ }));
+ if(mapInstance!==currentMap)return;
+ if(count>1)currentMap.fitBounds(bounds,{padding:55,maxZoom:13.2,duration:0});
+ if(failed.length){const note=document.getElementById("map-status");if(note)note.textContent="Points non localisés : "+failed.join(", ")+". Vérifiez les adresses."}
 }
 function render(){if(mapInstance){mapInstance.remove();mapInstance=null}document.body.className=page==="home"?"hero":"";document.getElementById("app").innerHTML=head()+content()+'<footer class="footer">Les saisonniers, les saisonnières · Prototype pédagogique</footer>';if(page==="map")initZurichMap();if(page==="station"&&step===2&&question===1){document.querySelectorAll(".question-card select")[0].value=saved.q2a||"";document.querySelectorAll(".question-card select")[1].value=saved.q2b||""}}render();
 </script></body></html>
